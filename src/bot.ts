@@ -1,3 +1,4 @@
+
 /**
  * The grammy bot: commands, and the one send path the poller uses.
  *
@@ -896,9 +897,15 @@ export function registerCallbackHandlers(
 }
 
 export function createBot(deps: BotDeps): Bot {
+  const clientOptions =
+    deps.config.telegramApiRoot !== undefined && deps.config.telegramApiRoot !== null
+      ? { client: { apiRoot: deps.config.telegramApiRoot } }
+      : undefined;
   const bot = new Bot(
     deps.config.botToken,
-    deps.botInfo !== undefined ? { botInfo: deps.botInfo } : undefined,
+    deps.botInfo !== undefined
+      ? { botInfo: deps.botInfo, ...clientOptions }
+      : clientOptions,
   );
   registerCommandHandlers(bot, deps);
   registerCallbackHandlers(bot, deps);

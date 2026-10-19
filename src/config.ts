@@ -271,6 +271,8 @@ export interface BotConfig extends StellarConfig {
   logBufferLines: number;
   /** Optional public URL to run the bot in webhook mode instead of long-polling. */
   telegramWebhookUrl: string | null;
+  /** Dev-only override for grammy's `client.apiRoot`; loopback hosts only. */
+  telegramApiRoot: string | null;
 }
 
 /** Fallback drain budget when a config object predates `SHUTDOWN_TIMEOUT_MS`. */
@@ -458,6 +460,34 @@ function collector(profile: Record<string, string>) {
         }
       } catch {
         problems.push(`${name} is not a valid URL; got "${value}"`);
+      }
+      return value;
+    },
+
+    /**
+     * Optional dev-only Telegram Bot API root. Must be a loopback http URL so a
+     * misconfigured deployment can never silently route traffic to a fake.
+     */
+    loopbackApiRoot(name: string): string | null {
+      const value = read(name);
+      if (value === undefined) return null;
+      let parsed: URL;
+      try {
+        parsed = new URL(value);
+      } catch {
+        problems.push(`${name} is not a valid URL; got "${value}"`);
+        return null;
+      }
+      if (parsed.protocol !== "http:") {
+        problems.push(`${name} must use http:// (loopback only); got "${value}"`);
+        return null;
+      }
+      const host = parsed.hostname;
+      if (host !== "127.0.0.1" && host !== "localhost") {
+        problems.push(
+          `${name} must point at 127.0.0.1 or localhost (dev only); got "${value}"`,
+        );
+        return null;
       }
       return value;
     },
@@ -767,6 +797,7 @@ export function loadConfig(): BotConfig {
     logSampleWindowMs: c.int("LOG_SAMPLE_WINDOW_MS", DEFAULTS.logSampleWindowMs, 1_000),
     logBufferLines: c.int("LOG_BUFFER_LINES", DEFAULTS.logBufferLines, 0),
     telegramWebhookUrl: c.optionalUrl("TELEGRAM_WEBHOOK_URL"),
+    telegramApiRoot: c.loopbackApiRoot("TELEGRAM_API_ROOT"),
   };
 
   if (c.problems.length > 0) throw new ConfigError(c.problems);
@@ -907,6 +938,7 @@ const CONFIG_KEYS: readonly ConfigKeySpec[] = [
   { key: "CHANNEL_PREVIEW_MODE", secret: false, hasBuiltInDefault: true },
   { key: "LINK_PREVIEW_MARKET", secret: false, hasBuiltInDefault: true },
   { key: "LINK_PREVIEW_SQUAD", secret: false, hasBuiltInDefault: true },
+  { key: "TELEGRAM_API_ROOT", secret: false },
   // Injected by a platform, never set by an operator: read only as the
   // HEALTH_PORT fallback, so it is reported for the same reason.
   { key: "PORT", secret: false },
